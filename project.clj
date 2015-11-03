@@ -38,7 +38,9 @@
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [com.cognitect/transit-clj  "0.8.281"]
                  [com.cognitect/transit-cljs "0.8.225"]
-                 [hiccup "1.0.5"]]
+                 [hiccup "1.0.5"]
+                 [alandipert/storage-atom "1.2.4"]
+                 [crypto-random "1.2.0"]]
 
   :min-lein-version "2.0.0"
   :uberjar-name "conquire.jar"

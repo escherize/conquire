@@ -58,7 +58,9 @@
      {:status 403
       :title "Invalid anti-forgery token"})}))
 
-(defn wrap-formats [handler]
+(defn wrap-formats
+  "Breaks Sente."
+  [handler]
   (wrap-restful-format handler {:formats [:json-kw :transit-json :transit-msgpack]}))
 
 (defn on-error [request response]
@@ -84,11 +86,11 @@
   (-> handler
       wrap-dev
       wrap-auth
-      wrap-formats
+      ;;wrap-formats
       wrap-webjars
       (wrap-defaults
        (-> site-defaults
-           (assoc-in [:security :anti-forgery] false)
+           (assoc-in [:security :anti-forgery] true)
            (assoc-in  [:session :store] (ttl-memory-store (* 60 30)))))
       wrap-context
       wrap-internal-error))

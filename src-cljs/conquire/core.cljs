@@ -1,11 +1,17 @@
 (ns conquire.core
+  (:require-macros
+   [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require [reagent.core :as reagent :refer [atom]]
             [reagent.session :as session]
             [secretary.core :as secretary :include-macros true]
             [goog.events :as events]
             [goog.history.EventType :as EventType]
             [markdown.core :refer [md->html]]
-            [ajax.core :refer [GET POST]])
+            [ajax.core :refer [GET POST]]
+            [cljs.core.async :as async :refer (<! >! put! chan)]
+            [taoensso.sente  :as sente :refer (cb-success?)]
+            [alandipert.storage-atom :refer [local-storage]]
+            [clojure.string :as str])
   (:import goog.History))
 
 (defn nav-link [uri title page collapsed?]
@@ -17,7 +23,7 @@
 (defn navbar []
   (let [collapsed? (atom true)]
     (fn []
-      [:nav.navbar.navbar-inverse.navbar-fixed-top
+      [:nav.navbar.navbar-default.navbar-fixed-top
        [:div.container
         [:div.navbar-header
          [:button.navbar-toggle
@@ -30,7 +36,7 @@
           [:span.icon-bar]
           [:span.icon-bar]
           [:span.icon-bar]]
-         [:a.navbar-brand {:href "#/"} "conquire"]]
+         [:a.navbar-brand {:href "#/"} "Conquire"]]
         [:div.navbar-collapse.collapse
          (when-not @collapsed? {:class "in"})
          [:ul.nav.navbar-nav
@@ -41,16 +47,17 @@
   [:div.container
    [:div.row
     [:div.col-md-12
-     "Conquer allows you to organize audience questions by popularity. You simply create a room and share the link. Audience members will be able to submit and vote for questions, and you can see every question as it happens."]]])
+     "Conquire allows you to aquire concurrent concurances organize audience questions by popularity. You simply create a room and share the link. Audience members will be able to submit and vote for questions, and you can see every question as it happens."]]])
 
 (defn home-page []
   [:div.container
    [:div.jumbotron
-    [:h1 "Welcome to Conquire"]
+    [:h1 "Conquire"]
     [:p "Invite your audience to ask you questions in real-time!"]]
    [:div.row
     [:div.col-md-12
-     [:h2 "Pick a name for your room."]]]
+     [:h2 "Pick a name for your room."]
+     [:p.hint "The title of your talk would work great."]]]
    [:div.row
     [:div.col-md-5]
     [:div.col-md-3
@@ -63,7 +70,9 @@
    :about #'about-page})
 
 (defn page []
-  [(pages (session/get :page))])
+  [:div
+   [:div {:style {:height "100px"}}]
+   [(pages (session/get :page))]])
 
 ;; -------------------------
 ;; Routes
@@ -91,15 +100,21 @@
 
 ;; -------------------------
 ;; Initialize app
-(defn fetch-docs! []
-  (GET (str js/context "/docs")
-       {:handler #(session/put! :docs %)}))
-
 (defn mount-components []
   (reagent/render [#'navbar] (.getElementById js/document "navbar"))
   (reagent/render [#'page] (.getElementById js/document "app")))
 
+(defn init-sente! []
+  (let [{:keys [chsk ch-recv send-fn state]}
+        (sente/make-channel-socket! "/chsk" ; Note the same path as before
+                                    {:type :auto})]
+    (def chsk       chsk)
+    (def ch-chsk    ch-recv) ; ChannelSocket's receive channel
+    (def chsk-send! send-fn) ; ChannelSocket's send API fn
+    (def chsk-state state)   ; Watchable, read-only atom
+    ))
+
 (defn init! []
-  (fetch-docs!)
+  (init-sente!)
   (hook-browser-navigation!)
   (mount-components))
