@@ -52,19 +52,19 @@
 
 (defn wrap-csrf [handler]
   (wrap-anti-forgery
-    handler
-    {:error-response
-     (error-page
-       {:status 403
-        :title "Invalid anti-forgery token"})}))
+   handler
+   {:error-response
+    (error-page
+     {:status 403
+      :title "Invalid anti-forgery token"})}))
 
 (defn wrap-formats [handler]
   (wrap-restful-format handler {:formats [:json-kw :transit-json :transit-msgpack]}))
 
 (defn on-error [request response]
   (error-page
-    {:status 403
-     :title (str "Access to " (:uri request) " is not authorized")}))
+   {:status 403
+    :title (str "Access to " (:uri request) " is not authorized")}))
 
 (defn wrap-restricted [handler]
   (restrict handler {:handler authenticated?
@@ -87,8 +87,8 @@
       wrap-formats
       wrap-webjars
       (wrap-defaults
-        (-> site-defaults
-            (assoc-in [:security :anti-forgery] false)
-            (assoc-in  [:session :store] (ttl-memory-store (* 60 30)))))
+       (-> site-defaults
+           (assoc-in [:security :anti-forgery] false)
+           (assoc-in  [:session :store] (ttl-memory-store (* 60 30)))))
       wrap-context
       wrap-internal-error))
