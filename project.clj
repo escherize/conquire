@@ -34,7 +34,11 @@
                  [http-kit "2.1.19"]
                  [com.taoensso/sente "1.6.0"]
                  [reagent-reforms "0.4.1"]
-                 [re-frame "0.5.0-alpha1"]]
+                 [re-frame "0.5.0-alpha1"]
+                 [org.clojure/core.async "0.1.346.0-17112a-alpha"]
+                 [com.cognitect/transit-clj  "0.8.281"]
+                 [com.cognitect/transit-cljs "0.8.225"]
+                 [hiccup "1.0.5"]]
 
   :min-lein-version "2.0.0"
   :uberjar-name "conquire.jar"
@@ -44,7 +48,8 @@
 
   :plugins [[lein-environ "1.0.1"]
             [lein-cljsbuild "1.1.0"]
-            [lein-sassc "0.10.4"]]
+            [lein-sassc "0.10.4"]
+            [cider/cider-nrepl "0.9.1"]]
   :sassc [{:src "resources/scss/screen.scss"
            :output-to "resources/public/css/screen.css"
            :style "nested"
