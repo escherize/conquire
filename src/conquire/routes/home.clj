@@ -6,7 +6,8 @@
             [taoensso.sente :as sente]
             [taoensso.sente.server-adapters.http-kit
              :refer (sente-web-server-adapter)]
-            [crypto.random :refer [base64]]))
+            [taoensso.timbre :as timbre :refer (tracef debugf infof warnf errorf)]
+            [conquire.chat-room :refer [user-id]]))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn
               connected-uids]}
@@ -18,13 +19,38 @@
   (def connected-uids                connected-uids) ; Watchable, read-only atom
   )
 
+(defmulti event-msg-handler :id) ; Dispatch on event-id
+
+(defn event-msg-handler* [{:as ev-msg :keys [uid id ?data event]}]
+  (def *ev-msg ev-msg)
+  (event-msg-handler ev-msg))
+
+(defmethod event-msg-handler :default ; Fallback
+  [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
+  (let [session (:session ring-req)
+        uid     (:uid     session)]
+    (debugf "Unhandled event: %s" event)
+    (when ?reply-fn
+      (?reply-fn {:umatched-event-as-echoed-from-from-server event}))))
+
+(defmethod event-msg-handler :conquire/create-room
+  [{:as ev-msg :keys [event uid]}]
+  (let [[_ room-name] event]
+    (println "Create room (" room-name ") called by: " uid)))
+
 (defn home-page [req]
-  (let [uid (or (get-in req [:session :uid])
-                (str "uid_" (base64 8)))]
+  (let [uid (or (get-in req [:session :uid]) (user-id))]
     (assoc (layout/render "home.html") :session {:uid uid})))
+
+(defonce router_ (atom nil))
+(defn stop-router! [] (when-let [stop-f @router_] (stop-f)))
+(defn start-router! []
+  (stop-router!)
+  (reset! router_ (sente/start-chsk-router! ch-chsk event-msg-handler*)))
+
+(start-router!)
 
 (defroutes home-routes
   (GET "/"      req (home-page req))
   (GET  "/chsk" req (ring-ajax-get-or-ws-handshake req))
-  (POST "/chsk" req (ring-ajax-post                req))
-  )
+  (POST "/chsk" req (ring-ajax-post                req)))

@@ -3,6 +3,9 @@
    [cljs.core.async.macros :as asyncm :refer (go go-loop)])
   (:require [reagent.core :as reagent :refer [atom]]
             [reagent.session :as session]
+            [re-frame.core :as rf :refer [subscribe
+                                          dispatch
+                                          dispatch-sync]]
             [secretary.core :as secretary :include-macros true]
             [goog.events :as events]
             [goog.history.EventType :as EventType]
@@ -11,81 +14,56 @@
             [cljs.core.async :as async :refer (<! >! put! chan)]
             [taoensso.sente  :as sente :refer (cb-success?)]
             [alandipert.storage-atom :refer [local-storage]]
-            [clojure.string :as str])
+            [taoensso.timbre :as t]
+            [clojure.string :as str]
+            conquire.subs
+            conquire.handlers
+            [re-com.core :as rc])
   (:import goog.History))
 
-(defn nav-link [uri title page collapsed?]
-  [:li {:class (when (= page (session/get :page)) "active")}
-   [:a {:href uri
-        :on-click #(reset! collapsed? true)}
-    title]])
-
-(defn navbar []
-  (let [collapsed? (atom true)]
-    (fn []
-      [:nav.navbar.navbar-default.navbar-fixed-top
-       [:div.container
-        [:div.navbar-header
-         [:button.navbar-toggle
-          {:class         (when-not @collapsed? "collapsed")
-           :data-toggle   "collapse"
-           :aria-expanded @collapsed?
-           :aria-controls "navbar"
-           :on-click      #(swap! collapsed? not)}
-          [:span.sr-only "Toggle Navigation"]
-          [:span.icon-bar]
-          [:span.icon-bar]
-          [:span.icon-bar]]
-         [:a.navbar-brand {:href "#/"} "Conquire"]]
-        [:div.navbar-collapse.collapse
-         (when-not @collapsed? {:class "in"})
-         [:ul.nav.navbar-nav
-          [nav-link "#/" "Home" :home collapsed?]
-          [nav-link "#/about" "About" :about collapsed?]]]]])))
+(declare chsk-send!)
 
 (defn about-page []
-  [:div.container
-   [:div.row
-    [:div.col-md-12
-     "Conquire allows you to aquire concurrent concurances organize audience questions by popularity. You simply create a room and share the link. Audience members will be able to submit and vote for questions, and you can see every question as it happens."]]])
+  [:p {:style {:font-size "20px"}}
+   "Conquire allows you to aquire concurrent concurances organize audience questions by popularity. You simply create a room and share the link. Audience members will be able to submit and vote for questions, and you can see every question as it happens."])
 
 (defn home-page []
-  [:div.container
-   [:div.jumbotron
-    [:h1 "Conquire"]
-    [:p "Invite your audience to ask you questions in real-time!"]]
-   [:div.row
-    [:div.col-md-12
-     [:h2 "Pick a name for your room."]
-     [:p.hint "The title of your talk would work great."]]]
-   [:div.row
-    [:div.col-md-5]
-    [:div.col-md-3
-     [:input.btn.btn-primary {:type "button"
-                              :on-click (fn [] (js/alert "ok"))
-                              :value "ok?"}]]]])
+  (let [room-name (subscribe [:get-path [:room-name]])
+        db (subscribe [:db])]
+    (fn []
+      [rc/h-box
+       :size "auto"
+       :children
+       [[rc/v-box
+         :size "auto"
+         :gap "10px"
+         :children
+         [[:div.jumbotron
+           [:h1 "Conquire"]
+           [:h4 "Invite your audience to ask you questions in real-time"]]
+          [rc/h-box
+           :gap "10px"
+           :justify :center
+           :children
+           [[rc/input-text
+             :model room-name
+             :change-on-blur? true
+             :on-change #(dispatch [:set-path [:room-name] %])]
+            [rc/button
+             :label "Let's go"
+             :on-click (fn []
+                         (chsk-send! [:conquire/create-room @room-name])
+                         (dispatch [:create-room @room-name]))]]]
+          [rc/line :class "debug"]
+          [:pre.debug (pr-str @db)]]]]])))
 
-(def pages
-  {:home #'home-page
-   :about #'about-page})
-
-(defn page []
-  [:div
-   [:div {:style {:height "100px"}}]
-   [(pages (session/get :page))]])
-
+(dispatch [:set-path [:current-page] home-page])
 ;; -------------------------
 ;; Routes
 (secretary/set-config! :prefix "#")
 
 (secretary/defroute "/" []
   (session/put! :page :home))
-
-(secretary/defroute "/about" []
-  (session/put! :page :about))
-
-(secretary/defroute "/r/:room-id" [room-id]
-  (session/put! :page :inside-room))
 
 ;; -------------------------
 ;; History
@@ -100,9 +78,6 @@
 
 ;; -------------------------
 ;; Initialize app
-(defn mount-components []
-  (reagent/render [#'navbar] (.getElementById js/document "navbar"))
-  (reagent/render [#'page] (.getElementById js/document "app")))
 
 (defn init-sente! []
   (let [{:keys [chsk ch-recv send-fn state]}
@@ -114,7 +89,51 @@
     (def chsk-state state)   ; Watchable, read-only atom
     ))
 
+(defmulti event-msg-handler :id) ; Dispatch on event-id
+
+;; Wrap for logging, catching, etc.:
+(defn event-msg-handler* [{:as ev-msg :keys [id ?data event]}]
+  (t/debugf "Event: %s" event)
+  (event-msg-handler ev-msg))
+
+(defmethod event-msg-handler :default ; Fallback
+  [{:as ev-msg :keys [event]}]
+  (t/debugf "Unhandled event: %s" event))
+
+(defmethod event-msg-handler :chsk/state
+  [{:as ev-msg :keys [?data]}]
+  (if (= ?data {:first-open? true})
+    (t/debugf "Channel socket successfully established!")
+    (t/debugf "Channel socket state change: %s" ?data)))
+
+(defmethod event-msg-handler :chsk/recv
+  [{:as ev-msg :keys [?data]}]
+  (t/debugf "Push event from server: %s" ?data))
+
+(defmethod event-msg-handler :chsk/handshake
+  [{:as ev-msg :keys [?data]}]
+  (let [[?uid ?csrf-token ?handshake-data] ?data]
+    (t/debugf "Handshake: %s" ?data)))
+
+(defn page []
+  (let [current-page (subscribe [:get-path [:current-page]
+                                 (fn []
+                                   [:h2 "No page loaded."])])]
+    (fn [] [:div.container
+            [@current-page]])))
+
+(defn mount-components []
+  (reagent/render [#'page] (.getElementById js/document "app")))
+
+(defonce router_ (atom nil))
+(defn stop-router! [] (when-let [stop-f @router_] (stop-f)))
+(defn start-router! []
+  (stop-router!)
+  (reset! router_ (sente/start-chsk-router! ch-chsk event-msg-handler*)))
+
+
 (defn init! []
+  (dispatch-sync [:initialize-db home-page])
   (init-sente!)
   (hook-browser-navigation!)
   (mount-components))

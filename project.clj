@@ -1,6 +1,6 @@
 (defproject conquire "0.1.0-SNAPSHOT"
 
-  :description "A webserver for realtime Q & A during a talk or lecture."
+  :description " A webserver for realtime Q & A during a talk or lecture."
   :url "http://example.com/FIXME"
 
   :dependencies [[org.clojure/clojure "1.7.0"]
@@ -33,14 +33,15 @@
                  [cljs-ajax "0.5.1"]
                  [http-kit "2.1.19"]
                  [com.taoensso/sente "1.6.0"]
-                 [reagent-reforms "0.4.1"]
                  [re-frame "0.5.0-alpha1"]
+                 [re-com "0.7.0-alpha1"]
                  [org.clojure/core.async "0.1.346.0-17112a-alpha"]
                  [com.cognitect/transit-clj  "0.8.281"]
                  [com.cognitect/transit-cljs "0.8.225"]
                  [hiccup "1.0.5"]
                  [alandipert/storage-atom "1.2.4"]
-                 [crypto-random "1.2.0"]]
+                 [crypto-random "1.2.0"]
+                 [prismatic/schema "1.0.3"]]
 
   :min-lein-version "2.0.0"
   :uberjar-name "conquire.jar"
