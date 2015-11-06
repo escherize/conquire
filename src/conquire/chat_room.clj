@@ -6,32 +6,64 @@
 (defn id-generator [prefix & [length]]
   (str prefix "_" (base64 (or length 3))))
 
-(defn question-id [] (id-generator "ques"))
-(defn room-id []     (id-generator "room"))
-(defn user-id []     (id-generator "user"))
+(defn gen-question-id [] (id-generator "ques"))
+(defn gen-room-id     [] (id-generator "room"))
+(defn gen-user-id     [] (id-generator "user"))
 
 (defn id? [prefix maybe-id]
   (->> maybe-id
        (re-matches (re-pattern (str prefix ".*")))
        boolean))
 
-(defn question-id? [maybe-id] (id? "ques" maybe-id))
-(defn room-id? [maybe-id] (id? "room" maybe-id))
-(defn user-id? [maybe-id] (id? "user" maybe-id))
+(fn question-id? [maybe-id] (id? "ques" maybe-id))
+(fn room-id?     [maybe-id] (id? "room" maybe-id))
+(fn user-id?     [maybe-id] (id? "user" maybe-id))
 
-(def Question {:id (s/pred question-id?)
-               :text s/Str
-               :upvotes #{(s/pred user-id?)}})
+(def QuestionID (s/pred question-id?))
+(def RoomID     (s/pred room-id?))
+(def UserID     (s/pred user-id?))
 
-(def Room {:id s/Str
-           :title s/Str
-           :owner (s/pred user-id?)
-           :questions {(s/pred question-id?) Question}})
+(def Question {:id      QuestionID
+               :text    s/Str
+               :upvotes #{UserID}})
 
-(def App {(s/pred room-id?) Room})
+(def Room {:id        s/Str
+           :title     s/Str
+           :owner     UserID
+           :questions {QuestionID Question}})
+
+(def App {RoomID Room})
 
 (s/defn ^:always-validate
-  upvote
-  [app user-id room-id question-id]
+  new-room :- App
+  [app :- App
+   user-id :- UserID
+   title :- s/Str
+   & [maybe-room-id :- RoomID]]
+  (let [room-id (or maybe-room-id (gen-room-id))]
+    (assoc app room-id {:id room-id
+                        :title title
+                        :owner user-id
+                        :questions {}})))
+
+(s/defn ^:always-validate
+  ask-question :- App
+  [app :- App
+   user-id :- UserID
+   room-id :- RoomID
+   question-text :- s/Str
+   & [maybe-question-id :- QuestionID]]
+  (let [question-id (or maybe-question-id (gen-question-id))]
+    (assoc-in app [room-id :questions question-id]
+              {:id question-id
+               :text question-text
+               :upvotes #{}})))
+
+(s/defn ^:always-validate
+  upvote :- App
+  [app :- App
+   user-id :- UserID
+   room-id :- RoomID
+   question-id :- QuestionID]
   (update-in app [room-id :questions question-id :upvotes]
              #(conj % user-id)))
