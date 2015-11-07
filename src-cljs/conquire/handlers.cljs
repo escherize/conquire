@@ -1,5 +1,12 @@
 (ns conquire.handlers
-  (:require [re-frame.core :as re-frame]))
+  (:require [re-frame.core :as re-frame]
+            [ajax.core :refer [GET]]))
+
+(defn handler [response]
+  (.log js/console (str response)))
+
+(defn error-handler [{:keys [status status-text]}]
+  (.log js/console (str "something bad happened: " status " " status-text)))
 
 (re-frame/register-handler
  :initialize-db
@@ -16,5 +23,5 @@
 (re-frame/register-handler
  :create-room
  (fn [db [_ room-name]]
-   ;;
+
    db))

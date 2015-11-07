@@ -1,7 +1,8 @@
 (ns conquire.chat-room
   (:require [clojure.string :as str]
             [schema.core :as s]
-            [crypto.random :refer [base64]]))
+            [crypto.random :refer [base64]]
+            [alandipert.enduro :as e]))
 
 (defn id-generator [prefix & [length]]
   (str prefix "_" (base64 (or length 3))))
@@ -15,9 +16,9 @@
        (re-matches (re-pattern (str prefix ".*")))
        boolean))
 
-(fn question-id? [maybe-id] (id? "ques" maybe-id))
-(fn room-id?     [maybe-id] (id? "room" maybe-id))
-(fn user-id?     [maybe-id] (id? "user" maybe-id))
+(defn question-id? [maybe-id] (id? "ques" maybe-id))
+(defn room-id?     [maybe-id] (id? "room" maybe-id))
+(defn user-id?     [maybe-id] (id? "user" maybe-id))
 
 (def QuestionID (s/pred question-id?))
 (def RoomID     (s/pred room-id?))
@@ -34,12 +35,12 @@
 
 (def App {RoomID Room})
 
+(def chat-rooms
+  (e/file-atom {} "resources/chat-room-store.clj"))
+
 (s/defn ^:always-validate
   new-room :- App
-  [app :- App
-   user-id :- UserID
-   title :- s/Str
-   & [maybe-room-id :- RoomID]]
+  [app :- App user-id :- UserID title :- s/Str & [maybe-room-id :- RoomID]]
   (let [room-id (or maybe-room-id (gen-room-id))]
     (assoc app room-id {:id room-id
                         :title title
@@ -67,3 +68,21 @@
    question-id :- QuestionID]
   (update-in app [room-id :questions question-id :upvotes]
              #(conj % user-id)))
+
+(s/defn ^:always-validate
+  delete-question :- App
+  [app :- App
+   user-id :- UserID
+   room-id :- RoomID
+   question-id :- QuestionID]
+  (when (= user-id (get-in app [room-id :owner])) ;; user-id is the room owner
+    (update-in app [room-id :questions]
+               #(dissoc % question-id))))
+
+(s/defn ^:always-validate
+  room-info
+  [app :- App
+   room-id :- RoomID]
+  (if-let [room (get-in app [room-id])]
+    room
+    {}))

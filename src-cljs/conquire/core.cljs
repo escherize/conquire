@@ -25,10 +25,14 @@
 
 (defn about-page []
   [:p {:style {:font-size "20px"}}
-   "Conquire allows you to aquire concurrent concurances organize audience questions by popularity. You simply create a room and share the link. Audience members will be able to submit and vote for questions, and you can see every question as it happens."])
+   "Conquire allows you to aquire concurrent concurances "
+   "organize audience questions by popularity. You simply "
+   "create a room and share the link. Audience members will "
+   "be able to submit and vote for questions, and you can see "
+   "every question as it happens."])
 
 (defn home-page []
-  (let [room-name (subscribe [:get-path [:room-name]])
+  (let [room-name (subscribe [:get-path [:room-name] ""])
         db (subscribe [:db])]
     (fn []
       [rc/h-box
@@ -44,16 +48,16 @@
           [rc/h-box
            :gap "10px"
            :justify :center
-           :children
-           [[rc/input-text
-             :model room-name
-             :change-on-blur? true
-             :on-change #(dispatch [:set-path [:room-name] %])]
-            [rc/button
-             :label "Let's go"
-             :on-click (fn []
-                         (chsk-send! [:conquire/create-room @room-name])
-                         (dispatch [:create-room @room-name]))]]]
+           :children [[rc/input-text
+                       :model room-name
+                       :change-on-blur? true
+                       :on-change (fn [x]
+                                    (dispatch [:set-path [:room-name] x]))]
+                      [rc/button
+                       :label "Let's go"
+                       :on-click (fn []
+                                   (chsk-send! [:conquire/create-room @room-name])
+                                   (dispatch [:create-room @room-name]))]]]
           [rc/line :class "debug"]
           [:pre.debug (pr-str @db)]]]]])))
 
@@ -108,7 +112,13 @@
 
 (defmethod event-msg-handler :chsk/recv
   [{:as ev-msg :keys [?data]}]
-  (t/debugf "Push event from server: %s" ?data))
+  (if-let [[action data] ?data]
+    (cond
+      (= action :conquire/change-room)
+      (t/debugf "Change room: %s" data)
+      :else
+      (t/debugf "unhandled action/data: %s" [action data]))
+    (t/debugf "Push event from server: %s" ?data)))
 
 (defmethod event-msg-handler :chsk/handshake
   [{:as ev-msg :keys [?data]}]
@@ -131,9 +141,9 @@
   (stop-router!)
   (reset! router_ (sente/start-chsk-router! ch-chsk event-msg-handler*)))
 
-
 (defn init! []
   (dispatch-sync [:initialize-db home-page])
   (init-sente!)
+  (start-router!)
   (hook-browser-navigation!)
   (mount-components))

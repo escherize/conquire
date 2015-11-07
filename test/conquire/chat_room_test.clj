@@ -61,21 +61,40 @@
                                      :upvotes #{some-user-id}}}}}]
       (is (= upvoted-app
              (upvote app some-user-id room-id question-id)))))
-  #_(testing "Ask question."
-      (let [owner-id (gen-user-id)
-            user-id (gen-user-id)
+  (testing "Ask question."
+    (let [owner-id (gen-user-id)
+          user-id (gen-user-id)
+          room-id (gen-room-id)
+          question-id (gen-question-id)
+          question-text "Earth is not round, right?"
+          app {room-id {:id room-id
+                        :title "Best room to ask a question in."
+                        :owner owner-id
+                        :questions {}}}]
+      (is (= {room-id {:id room-id
+                       :title "Best room to ask a question in."
+                       :owner owner-id
+                       :questions {question-id
+                                   {:id question-id
+                                    :text question-text
+                                    :upvotes #{}}}}}
+             (ask-question app user-id room-id question-text question-id)))))
+  (testing "owners can delete questions."
+    (testing "Ask question."
+      (let [user-id (gen-user-id)
             room-id (gen-room-id)
             question-id (gen-question-id)
-            question-text "Earth is not round, right?"
-            app {room-id {:id room-id
-                          :title "Best room to ask a question in."
-                          :owner owner-id
-                          :questions {}}}]
-        (is (= {room-id {:id room-id
-                         :title "Best room to ask a question in."
-                         :owner owner-id
-                         :questions {question-id
-                                     {:id question-id
-                                      :text question-text
-                                      :upvotes #{}}}}}
-               (ask-question app user-id room-id question-text question-id))))))
+            app {room-id
+                 {:id room-id
+                  :title "Best room to ask a question in."
+                  :owner user-id
+                  :questions {question-id
+                              {:id question-id
+                               :text "Earth is not round, right?"
+                               :upvotes #{}}}}}]
+        (is (= {room-id
+                {:id room-id
+                 :title "Best room to ask a question in."
+                 :owner user-id
+                 :questions {}}}
+               (delete-question app user-id room-id question-id)))))))

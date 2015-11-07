@@ -7,7 +7,7 @@
             [taoensso.sente.server-adapters.http-kit
              :refer (sente-web-server-adapter)]
             [taoensso.timbre :as timbre :refer (tracef debugf infof warnf errorf)]
-            [conquire.chat-room :refer [user-id]]))
+            [conquire.chat-room :refer [gen-user-id]]))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn
               connected-uids]}
@@ -38,8 +38,14 @@
   (let [[_ room-name] event]
     (println "Create room (" room-name ") called by: " uid)))
 
+(defn create-room [{:keys [session params] :as req}]
+  (let [uid (:uid session)
+        room-name (:room-name params)]
+    (pr-str {:uid uid
+             :title room-name})))
+
 (defn home-page [req]
-  (let [uid (or (get-in req [:session :uid]) (user-id))]
+  (let [uid (or (get-in req [:session :uid]) (gen-user-id))]
     (assoc (layout/render "home.html") :session {:uid uid})))
 
 (defonce router_ (atom nil))
@@ -51,6 +57,7 @@
 (start-router!)
 
 (defroutes home-routes
-  (GET "/"      req (home-page req))
-  (GET  "/chsk" req (ring-ajax-get-or-ws-handshake req))
-  (POST "/chsk" req (ring-ajax-post                req)))
+  (GET "/"          req (home-page req))
+  (GET "/room-info" req (create-room req))
+  (GET  "/chsk"     req (ring-ajax-get-or-ws-handshake req))
+  (POST "/chsk"     req (ring-ajax-post                req)))
