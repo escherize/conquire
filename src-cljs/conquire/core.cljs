@@ -44,7 +44,8 @@
          :children
          [[:div.jumbotron
            [:h1 "Conquire"]
-           [:h4 "Invite your audience to ask you questions in real-time"]]
+           [:h3 "Invite your audience to ask"
+            " questions in real-time"]]
           [rc/h-box
            :gap "10px"
            :justify :center
@@ -57,20 +58,29 @@
                        :label "Let's go"
                        :on-click (fn []
                                    (chsk-send! [:conquire/create-room @room-name]))]]]
-          [rc/line :class "debug"]
-          [:pre.debug (pr-str @db)]]]]])))
+          #_[rc/line :class "debug"]
+          #_[:pre.debug (pr-str @db)]]]]])))
+
+(set! re-com.box/debug false)
 
 (defn render-question [room-id {:keys [upvotes text id]}]
   ^{:key id}
   [rc/h-box
-   :gap "10px"
-   :children [[rc/md-circle-icon-button
-               :md-icon-name "zmdi-plus"
-               :size         :smaller
-               :on-click     #(chsk-send! [:conquire/upvote {:room-id room-id
-                                                             :question-id id}])]
-              [rc/label :label (count upvotes)]
-              [rc/label :label text]]])
+   :gap "20px"
+   :children [[rc/v-box
+               :justify :center
+               :children [[rc/md-circle-icon-button
+                           :md-icon-name "zmdi-plus-1"
+
+                           :on-click     #(chsk-send! [:conquire/upvote {:room-id room-id :question-id id}])]]]
+              [rc/v-box
+               :justify :center
+               :children [[rc/title :level :level2 :label (count upvotes)]]]
+              [rc/v-box
+               :justify :center
+               :children [[rc/v-box
+                           :justify :center
+                           :children [[rc/label :label text]]]]]]])
 
 (defn room-page []
   (let [db (subscribe [:db])
@@ -83,8 +93,10 @@
                 (fn []
                   [rc/v-box
                    :children
-                   [[:h2 @title] [:span {:style {:color "grey"}} @room-id]
-                    (map (partial render-question @room-id) @questions)
+                   [[:h2 @title]
+                    [rc/v-box
+                     :gap "10px"
+                     :children (map (partial render-question @room-id) @questions)]
                     [rc/h-box :children
                      [[rc/input-text
                        :model question-text
@@ -97,9 +109,9 @@
                                                 {:room-id @room-id
                                                  :question-text @question-text}])
                                    (reset! question-text ""))]]]
-                    [rc/line :class "debug"]
-                    [:pre.debug (pr-str @db)]]]))})))
-(dispatch [:set-path [:current-page] room-page])
+                    #_[rc/line :class "debug"]
+                    #_[:pre.debug (pr-str @db)]]]))})))
+
 ;; -------------------------
 ;; Routes
 (secretary/set-config! :prefix "#")
