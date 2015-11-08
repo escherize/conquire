@@ -11,3 +11,19 @@
  :db
  (fn [db & _]
    (reaction (dissoc @db :current-page))))
+
+(re-frame/register-sub
+ :questions
+ (fn [db & _]
+   (reaction
+    (->> @db
+         :current-room
+         :questions
+         vals))))
+
+(re-frame/register-sub
+ :current-owner
+ (fn [db & _] "Am I the room owner?"
+   (reaction
+    (= (-> @db :ws-state deref :uid)
+       (-> @db :current-room :owner)))))

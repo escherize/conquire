@@ -56,18 +56,51 @@
                       [rc/button
                        :label "Let's go"
                        :on-click (fn []
-                                   (chsk-send! [:conquire/create-room @room-name])
-                                   (dispatch [:create-room @room-name]))]]]
+                                   (chsk-send! [:conquire/create-room @room-name]))]]]
           [rc/line :class "debug"]
           [:pre.debug (pr-str @db)]]]]])))
 
-(dispatch [:set-path [:current-page] home-page])
+(defn room-page []
+  (let [db (subscribe [:db])
+        title (subscribe [:get-path [:current-room :title]])
+        room-id (subscribe [:get-path [:room :id]])
+        questions (subscribe [:questions])]
+    (reagent/create-class
+     {:component-did-mount #(do (chsk-send! [:conquire/room-info @room-id]))
+      :render (let [question-text (atom "")]
+                (fn []
+                  [:div[:div @title]
+                   [:div @room-id]
+                   [:ul (for [q @questions]
+                          [:li {:key (:id q)}
+                           (:text q)])]
+                   [rc/line :class "debug"]
+                   [:pre.debug (pr-str @db)]
+                   [rc/h-box :children
+                    [[:pre (pr-str @question-text)]
+                     [rc/input-text
+                      :model question-text
+                      :on-change #(reset! question-text %)
+                      :change-on-blur? true]
+                     [rc/button
+                      :label "Ask your question"
+                      :on-click (fn []
+                                  (chsk-send! [:conquire/ask-question
+                                               {:room-id @room-id
+                                                :question-text @question-text}])
+                                  (reset! question-text ""))]]]]))})))
+
 ;; -------------------------
 ;; Routes
 (secretary/set-config! :prefix "#")
 
 (secretary/defroute "/" []
-  (session/put! :page :home))
+  (dispatch [:set-path [:current-page] home-page]))
+(secretary/defroute "/r/:room-id" [room-id]
+  (do
+    (t/debugf "room-id: %s" room-id)
+    (dispatch-sync [:set-path [:room :id] room-id])
+    (dispatch [:set-path [:current-page] room-page])))
 
 ;; -------------------------
 ;; History
@@ -114,10 +147,17 @@
   [{:as ev-msg :keys [?data]}]
   (if-let [[action data] ?data]
     (cond
+
       (= action :conquire/change-room)
-      (t/debugf "Change room: %s" data)
+      (dispatch [:change-room data])
+
+      (= action :conquire/room-state)
+      (do
+        (t/debugf "recieved room state!")
+        (dispatch [:populate-room data]))
+
       :else
-      (t/debugf "unhandled action/data: %s" [action data]))
+      (t/debugf "Unhandled [action data]: %s" [action data]))
     (t/debugf "Push event from server: %s" ?data)))
 
 (defmethod event-msg-handler :chsk/handshake
@@ -140,6 +180,8 @@
 (defn start-router! []
   (stop-router!)
   (reset! router_ (sente/start-chsk-router! ch-chsk event-msg-handler*)))
+
+(dispatch-sync [:set-path [:ws-state] chsk-state])
 
 (defn init! []
   (dispatch-sync [:initialize-db home-page])

@@ -13,3 +13,4 @@ resources/public/js
 ./conquire.log.*
 ./conquire
 .nrepl-port
+resources/chat-room-store.clj

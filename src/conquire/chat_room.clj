@@ -38,8 +38,7 @@
 (def chat-rooms
   (e/file-atom {} "resources/chat-room-store.clj"))
 
-(s/defn ^:always-validate
-  new-room :- App
+(s/defn ^:always-validate new-room :- App
   [app :- App user-id :- UserID title :- s/Str & [maybe-room-id :- RoomID]]
   (let [room-id (or maybe-room-id (gen-room-id))]
     (assoc app room-id {:id room-id
@@ -47,21 +46,20 @@
                         :owner user-id
                         :questions {}})))
 
-(s/defn ^:always-validate
-  ask-question :- App
+(s/defn ^:always-validate ask-question :- App
   [app :- App
    user-id :- UserID
    room-id :- RoomID
    question-text :- s/Str
    & [maybe-question-id :- QuestionID]]
+  (def *in [app user-id room-id question-text maybe-question-id])
   (let [question-id (or maybe-question-id (gen-question-id))]
     (assoc-in app [room-id :questions question-id]
               {:id question-id
                :text question-text
-               :upvotes #{}})))
+               :upvotes #{user-id}})))
 
-(s/defn ^:always-validate
-  upvote :- App
+(s/defn ^:always-validate upvote :- App
   [app :- App
    user-id :- UserID
    room-id :- RoomID
@@ -69,8 +67,7 @@
   (update-in app [room-id :questions question-id :upvotes]
              #(conj % user-id)))
 
-(s/defn ^:always-validate
-  delete-question :- App
+(s/defn ^:always-validate delete-question :- App
   [app :- App
    user-id :- UserID
    room-id :- RoomID
@@ -79,8 +76,7 @@
     (update-in app [room-id :questions]
                #(dissoc % question-id))))
 
-(s/defn ^:always-validate
-  room-info
+(s/defn ^:always-validate room-info
   [app :- App
    room-id :- RoomID]
   (if-let [room (get-in app [room-id])]

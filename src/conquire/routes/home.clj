@@ -7,7 +7,8 @@
             [taoensso.sente.server-adapters.http-kit
              :refer (sente-web-server-adapter)]
             [taoensso.timbre :as timbre :refer (tracef debugf infof warnf errorf)]
-            [conquire.chat-room :refer [gen-user-id]]))
+            [conquire.chat-room :as cr :refer [gen-user-id]]
+            [alandipert.enduro :as e]))
 
 (let [{:keys [ch-recv send-fn ajax-post-fn ajax-get-or-ws-handshake-fn
               connected-uids]}
@@ -25,6 +26,34 @@
   (def *ev-msg ev-msg)
   (event-msg-handler ev-msg))
 
+(defmethod event-msg-handler :conquire/create-room
+  [{:as ev-msg :keys [event uid]}]
+  (let [[_ room-name] event
+        room-id (cr/gen-room-id)
+        _ (e/swap! cr/chat-rooms
+                   #(cr/new-room % uid room-name room-id))
+        response {:title room-name, :id room-id}]
+    (chsk-send! uid [:conquire/change-room response])
+    (pr-str response)))
+
+(defmethod event-msg-handler :conquire/room-info
+  [{:as ev-msg :keys [event uid]}]
+  (let [[_ room-id] event
+        room-info (cr/room-info @cr/chat-rooms room-id)]
+    (tracef "sending room state: " uid [:conquire/room-state room-info])
+    (chsk-send! uid [:conquire/room-state room-info])))
+
+(defmethod event-msg-handler :conquire/ask-question
+  [{:as ev-msg :keys [event uid]}]
+  (tracef "GOT HERE!!!!!!!!!!!!!!!!!!!!")
+  (println "GOT HERE!!!!!!!!!!!!!!!!!!!!")
+  (let [[_ {:keys [room-id question-text]}] event
+        _ (e/swap! cr/chat-rooms
+                   #(cr/ask-question % uid room-id question-text))
+        new-room-info (cr/room-info @cr/chat-rooms room-id)]
+    (tracef new-room-info)
+    (chsk-send! uid [:conquire/room-state new-room-info])))
+
 (defmethod event-msg-handler :default ; Fallback
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]
   (let [session (:session ring-req)
@@ -32,17 +61,6 @@
     (debugf "Unhandled event: %s" event)
     (when ?reply-fn
       (?reply-fn {:umatched-event-as-echoed-from-from-server event}))))
-
-(defmethod event-msg-handler :conquire/create-room
-  [{:as ev-msg :keys [event uid]}]
-  (let [[_ room-name] event]
-    (println "Create room (" room-name ") called by: " uid)))
-
-(defn create-room [{:keys [session params] :as req}]
-  (let [uid (:uid session)
-        room-name (:room-name params)]
-    (pr-str {:uid uid
-             :title room-name})))
 
 (defn home-page [req]
   (let [uid (or (get-in req [:session :uid]) (gen-user-id))]
@@ -57,7 +75,8 @@
 (start-router!)
 
 (defroutes home-routes
-  (GET "/"          req (home-page req))
-  (GET "/room-info" req (create-room req))
+  (GET  "/"          req (home-page req))
+  ;;(GET  "/room-info" req (create-room req))
+  ;; Sente \/
   (GET  "/chsk"     req (ring-ajax-get-or-ws-handshake req))
   (POST "/chsk"     req (ring-ajax-post                req)))
