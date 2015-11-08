@@ -19,7 +19,9 @@
     (->> @db
          :current-room
          :questions
-         vals))))
+         vals
+         (sort-by (comp count :upvotes))
+         reverse))))
 
 (re-frame/register-sub
  :current-owner

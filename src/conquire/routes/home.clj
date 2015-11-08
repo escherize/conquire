@@ -15,10 +15,12 @@
       (sente/make-channel-socket! sente-web-server-adapter {})]
   (def ring-ajax-post                ajax-post-fn)
   (def ring-ajax-get-or-ws-handshake ajax-get-or-ws-handshake-fn)
-  (def ch-chsk                       ch-recv) ; ChannelSocket's receive channel
-  (def chsk-send!                    send-fn) ; ChannelSocket's send API fn
-  (def connected-uids                connected-uids) ; Watchable, read-only atom
-  )
+  ;; ChannelSocket's receive channel
+  (def ch-chsk                       ch-recv)
+  ;; ChannelSocket's send API fn
+  (def chsk-send!                    send-fn)
+  ;; Watchable, read-only atom
+  (def connected-uids                connected-uids))
 
 (defmulti event-msg-handler :id) ; Dispatch on event-id
 
@@ -30,6 +32,7 @@
   [{:as ev-msg :keys [event uid]}]
   (let [[_ room-name] event
         room-id (cr/gen-room-id)
+        _ (e/swap! cr/chat-room-audiences #(assoc % room-id #{}))
         _ (e/swap! cr/chat-rooms
                    #(cr/new-room % uid room-name room-id))
         response {:title room-name, :id room-id}]
@@ -39,20 +42,32 @@
 (defmethod event-msg-handler :conquire/room-info
   [{:as ev-msg :keys [event uid]}]
   (let [[_ room-id] event
+        _ (e/swap! cr/chat-room-audiences
+                   #(update-in % [room-id] (fn [users] (conj users uid))))
         room-info (cr/room-info @cr/chat-rooms room-id)]
     (tracef "sending room state: " uid [:conquire/room-state room-info])
     (chsk-send! uid [:conquire/room-state room-info])))
 
 (defmethod event-msg-handler :conquire/ask-question
   [{:as ev-msg :keys [event uid]}]
-  (tracef "GOT HERE!!!!!!!!!!!!!!!!!!!!")
-  (println "GOT HERE!!!!!!!!!!!!!!!!!!!!")
-  (let [[_ {:keys [room-id question-text]}] event
+  (let [[_ data] event
+        {:keys [room-id question-text]} data
+        _ (tracef [uid room-id question-text])
         _ (e/swap! cr/chat-rooms
                    #(cr/ask-question % uid room-id question-text))
         new-room-info (cr/room-info @cr/chat-rooms room-id)]
-    (tracef new-room-info)
-    (chsk-send! uid [:conquire/room-state new-room-info])))
+    (doseq [uid (cr/users-in-room room-id)]
+      (chsk-send! uid [:conquire/room-state new-room-info]))))
+
+(defmethod event-msg-handler :conquire/upvote
+  [{:as ev-msg :keys [event uid]}]
+  (let [[_ {:keys [room-id question-id]}] event
+        room-info (cr/room-info @cr/chat-rooms room-id)
+        _ (e/swap! cr/chat-rooms
+                   #(cr/upvote % uid room-id question-id))
+        new-room-info (cr/room-info @cr/chat-rooms room-id)]
+    (doseq [uid (cr/users-in-room room-id)]
+      (chsk-send! uid [:conquire/room-state new-room-info]))))
 
 (defmethod event-msg-handler :default ; Fallback
   [{:as ev-msg :keys [event id ?data ring-req ?reply-fn send-fn]}]

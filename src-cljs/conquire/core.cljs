@@ -60,6 +60,18 @@
           [rc/line :class "debug"]
           [:pre.debug (pr-str @db)]]]]])))
 
+(defn render-question [room-id {:keys [upvotes text id]}]
+  ^{:key id}
+  [rc/h-box
+   :gap "10px"
+   :children [[rc/md-circle-icon-button
+               :md-icon-name "zmdi-plus"
+               :size         :smaller
+               :on-click     #(chsk-send! [:conquire/upvote {:room-id room-id
+                                                             :question-id id}])]
+              [rc/label :label (count upvotes)]
+              [rc/label :label text]]])
+
 (defn room-page []
   (let [db (subscribe [:db])
         title (subscribe [:get-path [:current-room :title]])
@@ -69,27 +81,25 @@
      {:component-did-mount #(do (chsk-send! [:conquire/room-info @room-id]))
       :render (let [question-text (atom "")]
                 (fn []
-                  [:div[:div @title]
-                   [:div @room-id]
-                   [:ul (for [q @questions]
-                          [:li {:key (:id q)}
-                           (:text q)])]
-                   [rc/line :class "debug"]
-                   [:pre.debug (pr-str @db)]
-                   [rc/h-box :children
-                    [[:pre (pr-str @question-text)]
-                     [rc/input-text
-                      :model question-text
-                      :on-change #(reset! question-text %)
-                      :change-on-blur? true]
-                     [rc/button
-                      :label "Ask your question"
-                      :on-click (fn []
-                                  (chsk-send! [:conquire/ask-question
-                                               {:room-id @room-id
-                                                :question-text @question-text}])
-                                  (reset! question-text ""))]]]]))})))
-
+                  [rc/v-box
+                   :children
+                   [[:h2 @title] [:span {:style {:color "grey"}} @room-id]
+                    (map (partial render-question @room-id) @questions)
+                    [rc/h-box :children
+                     [[rc/input-text
+                       :model question-text
+                       :on-change #(reset! question-text %)]
+                      [rc/button
+                       :label "Ask your question"
+                       :class "btn-primary"
+                       :on-click (fn []
+                                   (chsk-send! [:conquire/ask-question
+                                                {:room-id @room-id
+                                                 :question-text @question-text}])
+                                   (reset! question-text ""))]]]
+                    [rc/line :class "debug"]
+                    [:pre.debug (pr-str @db)]]]))})))
+(dispatch [:set-path [:current-page] room-page])
 ;; -------------------------
 ;; Routes
 (secretary/set-config! :prefix "#")
@@ -181,11 +191,12 @@
   (stop-router!)
   (reset! router_ (sente/start-chsk-router! ch-chsk event-msg-handler*)))
 
-(dispatch-sync [:set-path [:ws-state] chsk-state])
+
 
 (defn init! []
   (dispatch-sync [:initialize-db home-page])
   (init-sente!)
   (start-router!)
+  (dispatch-sync [:set-path [:ws-state] chsk-state])
   (hook-browser-navigation!)
   (mount-components))

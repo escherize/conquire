@@ -38,6 +38,16 @@
 (def chat-rooms
   (e/file-atom {} "resources/chat-room-store.clj"))
 
+(def chat-room-audiences
+  (e/file-atom {} "resources/chat-room-audiences.clj"))
+
+(s/defn ^:always-validate users-in-room :- [UserID]
+  [room-id :- RoomID]
+  (->> room-id
+       (get @chat-room-audiences)
+       (filter user-id?)
+       vec))
+
 (s/defn ^:always-validate new-room :- App
   [app :- App user-id :- UserID title :- s/Str & [maybe-room-id :- RoomID]]
   (let [room-id (or maybe-room-id (gen-room-id))]
@@ -51,7 +61,7 @@
    user-id :- UserID
    room-id :- RoomID
    question-text :- s/Str
-   & [maybe-question-id :- QuestionID]]
+   & [maybe-question-id]]
   (def *in [app user-id room-id question-text maybe-question-id])
   (let [question-id (or maybe-question-id (gen-question-id))]
     (assoc-in app [room-id :questions question-id]
